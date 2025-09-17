@@ -920,6 +920,23 @@ AddEventHandler('speakeasy:callback:store_menu', function(identifier)
     end
 end)
 
+-- Update owned on restart
+AddEventHandler('onResourceStart', function(resource)
+    if resource == GetCurrentResourceName() then
+        print("Resource started, resetting client state")
+        cachedIdentifier = nil
+        ownedSpeakeasies = {}
+        hasTeleported = false
+        pinnedInteriors = {}
+        isGathering = false
+        isDelivering = false
+        deliveryJugs = 0
+        deliverySpeakeasy = nil
+        TriggerServerEvent('speakeasy:getIdentifier', 'initial_sync')
+        TriggerServerEvent('speakeasy:requestSync')
+        print("Requested identifier and speakeasy sync")
+    end
+end)
 -- Update owned speakeasies
 RegisterNetEvent('speakeasy:updateOwnedSpeakeasies')
 AddEventHandler('speakeasy:updateOwnedSpeakeasies', function(data)
