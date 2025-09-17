@@ -27,53 +27,66 @@ Citizen.CreateThread(function()
                 name = row.speakeasy_name,
                 ownerName = row.owner_name
             }
+
+            --  Rehydrate playerJugs and playerBrews
+            playerJugs[row.identifier] = playerJugs[row.identifier] or {}
+            playerJugs[row.identifier][row.speakeasy_name] = { jugs = 0 }
+
+            playerBrews[row.identifier] = playerBrews[row.identifier] or {}
+            playerBrews[row.identifier][row.speakeasy_name] = { count = 0 }
+
             VORPInv.registerInventory("speakeasy_stash_" .. row.speakeasy_name, "Speakeasy Stash", 20, false, true, true)
         end
+
         print("Server loaded " .. tostring(#result) .. " owned speakeasies")
         TriggerClientEvent('speakeasy:updateOwnedSpeakeasies', -1, ownedSpeakeasies)
     end)
 end)
 
+
 RegisterServerEvent('speakeasy:getIdentifier')
 AddEventHandler('speakeasy:getIdentifier', function(context)
     local src = source
-    local user = VORPcore.getUser(src)
-    if not user then
-        print("speakeasy:getIdentifier failed: No user found for source " .. src)
-        Citizen.CreateThread(function()
-            local maxRetries = 5
-            local retryCount = 0
-            while retryCount < maxRetries do
-                Wait(5000)
-                user = VORPcore.getUser(src)
-                if user then
-                    local character = user.getUsedCharacter
-                    if character and character.identifier then
-                        print("Sending identifier " .. character.identifier .. " for context " .. context .. " to source " .. src)
-                        TriggerClientEvent('speakeasy:callback:' .. context, src, character.identifier)
-                        return
-                    end
+    local maxRetries = 5
+    local retryDelay = 2000
+    local retryCount = 0
+
+    Citizen.CreateThread(function()
+        local user, character
+
+        while retryCount < maxRetries do
+            user = VORPcore.getUser(src)
+            if user then
+                character = type(user.getUsedCharacter) == "function" and user.getUsedCharacter() or user.getUsedCharacter
+                if character and character.identifier then
+                    print("[Speakeasy]  Identifier found: " .. character.identifier .. " for context: " .. context)
+                    TriggerClientEvent('speakeasy:callback:' .. context, src, character.identifier)
+                    return
+                else
+                    print("[Speakeasy]  Character or identifier missing on retry " .. retryCount)
                 end
-                retryCount = retryCount + 1
-                print("Retry " .. retryCount .. ": No user/character for source " .. src)
+            else
+                print("[Speakeasy]  No user found on retry " .. retryCount)
             end
-            TriggerClientEvent('speakeasy:callback:' .. context, src, nil)
-        end)
-        return
-    end
-    local character = user.getUsedCharacter
-    if not character or not character.identifier then
-        print("speakeasy:getIdentifier failed: No character/identifier for source " .. src)
+
+            retryCount = retryCount + 1
+            Wait(retryDelay)
+        end
+
+        print("[Speakeasy]  Failed to retrieve identifier after " .. maxRetries .. " retries for source " .. src)
         TriggerClientEvent('speakeasy:callback:' .. context, src, nil)
-        return
-    end
-    print("Sending identifier " .. character.identifier .. " for context " .. context .. " to source " .. src)
-    TriggerClientEvent('speakeasy:callback:' .. context, src, character.identifier)
+    end)
 end)
 
 RegisterServerEvent('speakeasy:requestSync')
 AddEventHandler('speakeasy:requestSync', function()
     local src = source
+    if not src then
+        print("[Speakeasy]  requestSync failed: source is nil")
+        return
+    end
+
+    print("[Speakeasy] 🔄 Syncing owned speakeasies to source " .. src)
     TriggerClientEvent('speakeasy:updateOwnedSpeakeasies', src, ownedSpeakeasies)
 end)
 
@@ -151,8 +164,13 @@ AddEventHandler('speakeasy:sellSpeakeasy', function(speakeasyName)
     local src = source
     local user = VORPcore.getUser(src)
     if not user then return end
-    local character = user.getUsedCharacter
-    local identifier = character.identifier
+    local character = type(user.getUsedCharacter) == "function" and user.getUsedCharacter() or user.getUsedCharacter
+if not character or not character.identifier then
+    print("[Speakeasy]  No character or identifier found for source " .. src)
+    return
+end
+local identifier = character.identifier
+
 
     if not ownedSpeakeasies[identifier] or ownedSpeakeasies[identifier].name ~= speakeasyName then
         TriggerClientEvent('vorp:TipRight', src, "You do not own this speakeasy!", 5000)
