@@ -387,8 +387,17 @@ Citizen.CreateThread(function()
                     PromptSetEnabled(stashPrompt, true)
                     PromptSetVisible(stashPrompt, true)
                     if PromptHasStandardModeCompleted(stashPrompt) then
-                        TriggerServerEvent('speakeasy:openStash', name)
-                        stashCooldown = GetGameTimer() + 1000
+                        -- Send player's identifier so stash is per-player on the server
+                        if cachedIdentifier then
+                            TriggerServerEvent('speakeasy:openStash', name, cachedIdentifier)
+                            stashCooldown = GetGameTimer() + 1000
+                        else
+                            -- If we don't have the identifier cached yet, request it and notify player
+                            print("stash: cachedIdentifier missing, requesting from server before opening stash")
+                            TriggerServerEvent('speakeasy:getIdentifier', 'stash_request')
+                            TriggerEvent('vorp:TipRight', "Fetching player data; try again in a moment.", 3000)
+                            stashCooldown = GetGameTimer() + 1000
+                        end
                     end
                 else
                     PromptSetEnabled(stashPrompt, false)
@@ -989,11 +998,11 @@ AddEventHandler('speakeasy:callback:store_menu', function(identifier)
     print("Opening store menu for identifier: " .. identifier)
     print("ownedSpeakeasies: " .. json.encode(ownedSpeakeasies))
     local speakeasies = {
-        {name = "Valentine Speakeasy", price = 50},
-        {name = "St. Denis Speakeasy", price = 50},
-        {name = "Blackwater Speakeasy", price = 50},
-        {name = "Tumbleweed Speakeasy", price = 50},
-        {name = "Strawberry Speakeasy", price = 50}
+        {name = "Valentine Speakeasy", price = 500},
+        {name = "St. Denis Speakeasy", price = 500},
+        {name = "Blackwater Speakeasy", price = 500},
+        {name = "Tumbleweed Speakeasy", price = 500},
+        {name = "Strawberry Speakeasy", price = 500}
     }
     local menuElements = {}
     for _, speakeasy in pairs(speakeasies) do
