@@ -7,7 +7,7 @@ local ownedSpeakeasies = {}
 local playerJugs = {}
 local playerBrews = {}
 
-print("Starting tlg-speakeasy server.lua (Bugfix v1.2.0)")
+print("Starting tlg-speakeasy server.lua (patched for moonshine)")
 
 -- Get player's current routing bucket
 RegisterServerEvent('speakeasy:getCurrentBucket')
@@ -52,14 +52,16 @@ Citizen.CreateThread(function()
                 ownerName = row.owner_name
             }
 
-            --  Rehydrate playerJugs and playerBrews
+            -- Rehydrate playerJugs and playerBrews per identifier
             playerJugs[row.identifier] = playerJugs[row.identifier] or {}
             playerJugs[row.identifier][row.speakeasy_name] = { jugs = 0 }
 
             playerBrews[row.identifier] = playerBrews[row.identifier] or {}
             playerBrews[row.identifier][row.speakeasy_name] = { count = 0 }
 
-            VORPInv.registerInventory("speakeasy_stash_" .. row.speakeasy_name, "Speakeasy Stash", 20, false, true, true)
+            -- Register a unique stash inventory per-player-per-speakeasy
+            local invName = "speakeasy_stash_" .. row.speakeasy_name .. "_" .. row.identifier
+            VORPInv.registerInventory(invName, "Speakeasy Stash", 20, false, true, true)
         end
 
         print("Server loaded " .. tostring(#result) .. " owned speakeasies")
@@ -110,7 +112,7 @@ AddEventHandler('speakeasy:requestSync', function()
         return
     end
 
-    print("[Speakeasy]  Syncing owned speakeasies to source " .. src)
+    print("[Speakeasy] 🔄 Syncing owned speakeasies to source " .. src)
     TriggerClientEvent('speakeasy:updateOwnedSpeakeasies', src, ownedSpeakeasies)
 end)
 
@@ -148,7 +150,9 @@ AddEventHandler('speakeasy:buySpeakeasy', function(speakeasyName, price)
             ['@ownerName'] = ownerName
         })
         
-        VORPInv.registerInventory("speakeasy_stash_" .. speakeasyName, "Speakeasy Stash", 20, false, true, true)
+        -- Register a unique stash inventory for this owner and speakeasy
+        local invName = "speakeasy_stash_" .. speakeasyName .. "_" .. identifier
+        VORPInv.registerInventory(invName, "Speakeasy Stash", 20, false, true, true)
         TriggerClientEvent('speakeasy:updateOwnedSpeakeasies', -1, ownedSpeakeasies)
         TriggerClientEvent('vorp:TipRight', src, "You bought " .. speakeasyName .. " for $" .. price, 5000)
         print("ownedSpeakeasies updated after buy: " .. json.encode(ownedSpeakeasies))
@@ -276,14 +280,21 @@ AddEventHandler('speakeasy:openStash', function(speakeasyType)
     local user = VORPcore.getUser(src)
     if not user then return end
     local character = user.getUsedCharacter
+    if not character or not character.identifier then
+        TriggerClientEvent('vorp:TipRight', src, "Error: Could not determine player identifier.", 5000)
+        return
+    end
     local identifier = character.identifier
 
+    -- Validate ownership
     if not ownedSpeakeasies[identifier] or ownedSpeakeasies[identifier].name ~= speakeasyType then
         TriggerClientEvent('vorp:TipRight', src, "You do not own this speakeasy!", 5000)
         return
     end
 
-    VORPInv.OpenInv(src, "speakeasy_stash_" .. speakeasyType)
+    -- Open the per-player stash inventory
+    local invName = "speakeasy_stash_" .. speakeasyType .. "_" .. identifier
+    VORPInv.OpenInv(src, invName)
 end)
 
 RegisterServerEvent('speakeasy:brewSuccess')
